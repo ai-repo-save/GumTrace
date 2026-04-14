@@ -8,7 +8,8 @@
 
 gboolean module_symbols_cb(const GumSymbolDetails * details, gpointer user_data) {
     auto *instance = GumTrace::get_instance();
-    if (details && details->name && details->address && details->section->protection & GUM_PAGE_READ) {
+    if (details && details->name && details->address && details->section != nullptr &&
+        (details->section->protection & GUM_PAGE_READ)) {
         instance->func_maps[details->address] = details->name;
     }
 
