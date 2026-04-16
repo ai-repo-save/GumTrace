@@ -6,6 +6,12 @@
 #include "Utils.h"
 #include "FuncPrinter.h"
 
+/** 必须在 Stalker 所跟随的 OS 线程上执行 flush，否则待发 callout（含 SVC 后的 FuncPrinter::after）可能未排空。 */
+static void gumtrace_flush_on_stalked_thread(const GumCpuContext *cpu_context, gpointer user_data) {
+    (void)cpu_context;
+    gum_stalker_flush((GumStalker *)user_data);
+}
+
 GumTrace *GumTrace::get_instance() {
     static GumTrace instance;
     return &instance;
@@ -414,15 +420,26 @@ void GumTrace::follow() {
         : gum_stalker_follow_me(_stalker, _transformer, nullptr);
 }
 
-
 void GumTrace::unfollow() {
-    // SVC/BL 的 FuncPrinter::after 在下一次 callout 开头执行；若直接 unfollow，
-    // 最后一条可能是「已打印 svc、last_func_context.call 仍为 true」而永远等不到下一次 callout，
-    // 日志会截断在 svc 行。先 flush 排空待发 callout，再停止跟随。
+    // SVC/BL 的 FuncPrinter::after 在下一次 callout 开头执行；若 unfollow 过早，会丢掉尚未交付的 callout，
+    // 不仅漏 syscall 的 after，也会漏 JNI_OnLoad 体内尚未打印的指令与末尾 ret（CPU 已执行完，但 Stalker 日志滞后）。
+    // gum_stalker_flush 只刷 event sink，不能代替「再跑一条被跟踪指令」；勿在 native 伪造尾部，应由 Frida 推迟 unrun。
+    // trace_thread_id>0 时在目标线程上 flush；否则 follow_me 路径由当前线程 flush。
+    if (_stalker != nullptr) {
+        if (trace_thread_id > 0) {
+            const GumThreadId tid = static_cast<GumThreadId>(trace_thread_id);
+            if (!gum_stalker_run_on_thread_sync(_stalker, tid, gumtrace_flush_on_stalked_thread, _stalker)) {
+                gum_stalker_flush(_stalker);
+            }
+        } else {
+            gum_stalker_flush(_stalker);
+        }
+    }
+    trace_thread_id > 0 ? gum_stalker_unfollow(_stalker, static_cast<GumThreadId>(trace_thread_id))
+                        : gum_stalker_unfollow_me(_stalker);
     if (_stalker != nullptr) {
         gum_stalker_flush(_stalker);
     }
-    trace_thread_id > 0 ? gum_stalker_unfollow(_stalker, trace_thread_id) : gum_stalker_unfollow_me(_stalker);
 
     if (trace_file.is_open()) {
         trace_file.write(buffer, buffer_offset);
