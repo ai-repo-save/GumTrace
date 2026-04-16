@@ -22,6 +22,9 @@ add_library(GumTrace SHARED
 if(ANDROID)
     message(STATUS "Configuring for Android")
 
+    if(NOT CMAKE_SYSROOT)
+        message(FATAL_ERROR "Android build requires CMAKE_SYSROOT (use NDK android.toolchain.cmake)")
+    endif()
     set(ANDROID_SYSROOT_INCLUDE "${CMAKE_SYSROOT}/usr/include")
 
     target_include_directories(GumTrace SYSTEM PUBLIC .

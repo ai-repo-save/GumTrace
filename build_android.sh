@@ -1,11 +1,10 @@
 #!/bin/bash
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ -z "${ANDROID_NDK_HOME:-}" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
-    echo "Please set ANDROID_NDK_HOME to your Android NDK installation path."
+    echo "请设置 ANDROID_NDK_HOME 为 Android NDK 根目录（须含 build/cmake/android.toolchain.cmake）。"
     exit 1
 fi
 

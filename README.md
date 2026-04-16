@@ -1,9 +1,10 @@
-
 # 真机 GumTrace，每 3 秒 1G
 
 基于 Frida Gum (Stalker) 引擎的 ARM64 真机动态指令追踪工具，支持 Android 和 iOS 平台。
+
 ## 致谢
--  [Trace UI](https://github.com/imj01y/trace-ui) - 本项目官方指定的 trace 分析工具。高性能 ARM64 执行 trace 可视化分析工具。基于 Tauri 2 + React 构建的桌面应用，专为安全研究员设计，支持千万行或亿行级大规模 trace 的流畅浏览、函数调用树折叠、反向污点追踪、内存/寄存器实时查看等功能。Trace Ul 与 GumTrace 深度适配，是在分析 trace 日志时的得力助手。感谢 [@imj01y](https://github.com/imj01y) 的开源贡献!
+
+- [Trace UI](https://github.com/imj01y/trace-ui) - 本项目官方指定的 trace 分析工具。高性能 ARM64 执行 trace 可视化分析工具。基于 Tauri 2 + React 构建的桌面应用，专为安全研究员设计，支持千万行或亿行级大规模 trace 的流畅浏览、函数调用树折叠、反向污点追踪、内存/寄存器实时查看等功能。Trace Ul 与 GumTrace 深度适配，是在分析 trace 日志时的得力助手。感谢 [@imj01y](https://github.com/imj01y) 的开源贡献!
 
 ## 功能概述
 
@@ -89,12 +90,14 @@ GumTrace 编译为共享库，导出以下 C 接口：
 
 初始化追踪器。
 
-| 参数 | 类型 | 说明 |
-|---|---|---|
-| `module_names` | `const char*` | 要追踪的模块名，多个用逗号分隔（如 `"libtarget.so,libutils.so"`） |
-| `trace_file_path` | `char*` | 日志输出文件路径 |
-| `thread_id` | `int` | 要追踪的线程 ID（0 表示追踪当前线程） |
-| `options` | `GUM_OPTIONS` | 选项位掩码，`1` 启用 DEBUG 模式（高频刷写日志） |
+
+| 参数                | 类型            | 说明                                              |
+| ----------------- | ------------- | ----------------------------------------------- |
+| `module_names`    | `const char*` | 要追踪的模块名，多个用逗号分隔（如 `"libtarget.so,libutils.so"`） |
+| `trace_file_path` | `char*`       | 日志输出文件路径                                        |
+| `thread_id`       | `int`         | 要追踪的线程 ID（0 表示追踪当前线程）                           |
+| `options`         | `GUM_OPTIONS` | 选项位掩码，`1` 启用 DEBUG 模式（高频刷写日志）                   |
+
 
 ### `run()`
 
@@ -102,7 +105,7 @@ GumTrace 编译为共享库，导出以下 C 接口：
 
 ### `unrun()`
 
-停止追踪，刷写并关闭日志文件。
+停止追踪，刷写并关闭日志文件。内部在 `unfollow()` 中于 `gum_stalker_unfollow*` 之前调用 `gum_stalker_flush`，以便排空 Stalker 待发 callout，使最后一条 `svc`/函数调用能完成对应的 `call func:` / `ret:` 输出（否则日志可能以孤立 `svc` 行结束）。
 
 ## 使用示例（Frida）
 
@@ -115,6 +118,7 @@ adb push build_android/libGumTrace.so /data/local/tmp/
 ```
 
 > **注意：** 如果 SO 加载失败（dlopen 返回 NULL），通常是 SELinux 阻止了从 `/data/local/tmp/` 加载共享库。需要先关闭 SELinux：
+>
 > ```bash
 > adb shell setenforce 0
 > ```
@@ -206,18 +210,20 @@ GumTrace/
 
 GumTrace 内置了对常见库函数参数的自动解析：
 
-| 类别 | 函数 |
-|---|---|
-| 字符串操作 | `strlen`, `strcmp`, `strncmp`, `strcpy`, `strcat`, `strstr`, `strdup` 等 |
-| 内存操作 | `memcpy`, `memmove`, `memset`, `memcmp`, `memmem` 等 |
-| 文件操作 | `open`, `openat`, `read`, `write`, `fopen`, `close` 等 |
-| 内存分配 | `malloc`, `calloc`, `realloc`, `free` |
-| 内存映射 | `mmap`, `mprotect` |
-| 动态链接 | `dlopen`, `dlsym`, `dlclose` |
-| 格式化 | `sprintf`, `snprintf`, `sscanf` |
-| 系统 | `syscall`, `__system_property_get`, `sysconf` |
+
+| 类别            | 函数                                                                             |
+| ------------- | ------------------------------------------------------------------------------ |
+| 字符串操作         | `strlen`, `strcmp`, `strncmp`, `strcpy`, `strcat`, `strstr`, `strdup` 等        |
+| 内存操作          | `memcpy`, `memmove`, `memset`, `memcmp`, `memmem` 等                            |
+| 文件操作          | `open`, `openat`, `read`, `write`, `fopen`, `close` 等                          |
+| 内存分配          | `malloc`, `calloc`, `realloc`, `free`                                          |
+| 内存映射          | `mmap`, `mprotect`                                                             |
+| 动态链接          | `dlopen`, `dlsym`, `dlclose`                                                   |
+| 格式化           | `sprintf`, `snprintf`, `sscanf`                                                |
+| 系统            | `syscall`, `__system_property_get`, `sysconf`                                  |
 | JNI (Android) | `FindClass`, `GetMethodID`, `CallObjectMethod`, `GetStringUTFChars` 等全部 JNI 函数 |
-| ObjC (iOS) | `objc_msgSend`, `objc_retain`, `objc_release`, `NSClassFromString` 等 |
+| ObjC (iOS)    | `objc_msgSend`, `objc_retain`, `objc_release`, `NSClassFromString` 等           |
+
 
 ## 技术细节
 

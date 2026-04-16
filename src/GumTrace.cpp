@@ -416,6 +416,12 @@ void GumTrace::follow() {
 
 
 void GumTrace::unfollow() {
+    // SVC/BL 的 FuncPrinter::after 在下一次 callout 开头执行；若直接 unfollow，
+    // 最后一条可能是「已打印 svc、last_func_context.call 仍为 true」而永远等不到下一次 callout，
+    // 日志会截断在 svc 行。先 flush 排空待发 callout，再停止跟随。
+    if (_stalker != nullptr) {
+        gum_stalker_flush(_stalker);
+    }
     trace_thread_id > 0 ? gum_stalker_unfollow(_stalker, trace_thread_id) : gum_stalker_unfollow_me(_stalker);
 
     if (trace_file.is_open()) {
