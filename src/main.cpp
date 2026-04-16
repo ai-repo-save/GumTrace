@@ -140,10 +140,16 @@ void init(const char *module_names, char *trace_file_path, int thread_id, GUM_OP
     }
 
 #if PLATFORM_ANDROID
+    // JNI_OnLoad 等极早阶段 libart.so 可能尚未出现在进程模块表里；禁止对 nullptr 调 gum_module_*（否则 fault addr 0x8）。
     auto libart_module = gum_process_find_module_by_name("libart.so");
-    GumAddress JNI_GetCreatedJavaVMs_addr = gum_module_find_symbol_by_name(libart_module, "JNI_GetCreatedJavaVMs");
-    if (JNI_GetCreatedJavaVMs_addr == 0) {
-        JNI_GetCreatedJavaVMs_addr = gum_module_find_export_by_name(libart_module, "JNI_GetCreatedJavaVMs");
+    GumAddress JNI_GetCreatedJavaVMs_addr = 0;
+    if (libart_module != nullptr) {
+        JNI_GetCreatedJavaVMs_addr = gum_module_find_symbol_by_name(libart_module, "JNI_GetCreatedJavaVMs");
+        if (JNI_GetCreatedJavaVMs_addr == 0) {
+            JNI_GetCreatedJavaVMs_addr = gum_module_find_export_by_name(libart_module, "JNI_GetCreatedJavaVMs");
+        }
+    } else {
+        LOGE("libart.so not found yet; skip module-scoped JNI_GetCreatedJavaVMs lookup");
     }
     if (JNI_GetCreatedJavaVMs_addr == 0) {
         JNI_GetCreatedJavaVMs_addr = gum_module_find_global_export_by_name("JNI_GetCreatedJavaVMs");
