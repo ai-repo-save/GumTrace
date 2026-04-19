@@ -62,6 +62,18 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
     auto callback_ctx = (CALLBACK_CTX *)user_data;
     char *buff = self->buffer;
     int &buff_n = self->buffer_offset;
+    self->debug_callout_total++;
+    self->debug_last_pc = cpu_context->pc;
+
+    if (self->debug_waiting_after_svc) {
+        self->debug_callout_after_svc++;
+        self->debug_waiting_after_svc = false;
+        LOGE("[gumtrace-debug] first callout after svc: total=%llu after_svc=%llu svc_pc=0x%llx now_pc=0x%llx",
+             (unsigned long long) self->debug_callout_total,
+             (unsigned long long) self->debug_callout_after_svc,
+             (unsigned long long) self->debug_last_svc_pc,
+             (unsigned long long) cpu_context->pc);
+    }
 
     if (buff_n > BUFFER_SIZE - 1024) {
         self->trace_file.write(buff, buff_n);
@@ -93,6 +105,9 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
             self->trace_file.write(buff, buff_n);
             buff_n = 0;
         }
+        LOGE("[gumtrace-debug] FuncPrinter after pending consumed: total=%llu pc=0x%llx",
+             (unsigned long long) self->debug_callout_total,
+             (unsigned long long) cpu_context->pc);
 
         self->last_func_context.call = false;
 #        if PLATFORM_ANDROID
@@ -266,6 +281,15 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
     if (callback_ctx->instruction.id == ARM64_INS_SVC) {
         auto svc_it = self->svc_func_maps.find(cpu_context->x[8]);
         if (svc_it == self->svc_func_maps.end()) goto skip_call;
+        self->debug_svc_count++;
+        self->debug_last_svc_pc = cpu_context->pc;
+        self->debug_waiting_after_svc = true;
+        LOGE("[gumtrace-debug] svc hit: count=%llu nr=%llu name=%s pc=0x%llx total=%llu",
+             (unsigned long long) self->debug_svc_count,
+             (unsigned long long) cpu_context->x[8],
+             svc_it->second.c_str(),
+             (unsigned long long) cpu_context->pc,
+             (unsigned long long) self->debug_callout_total);
         self->last_func_context.info_n = 0;
         self->last_func_context.name = svc_it->second.c_str();
         memcpy(&self->last_func_context.cpu_context, cpu_context, sizeof(GumCpuContext));
@@ -316,6 +340,14 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
 
     skip_call:
     self->trace_flush++;
+    if ((self->debug_callout_total % 50000ULL) == 0ULL) {
+        LOGE("[gumtrace-debug] heartbeat: total=%llu svc=%llu after_svc=%llu last_pc=0x%llx waiting_after_svc=%d",
+             (unsigned long long) self->debug_callout_total,
+             (unsigned long long) self->debug_svc_count,
+             (unsigned long long) self->debug_callout_after_svc,
+             (unsigned long long) self->debug_last_pc,
+             self->debug_waiting_after_svc ? 1 : 0);
+    }
     if (self->options.mode == GUM_OPTIONS_MODE_DEBUG) {
         if (self->trace_flush > 20) {
             if (buff_n > 0) {
@@ -415,12 +447,22 @@ const std::map<std::string, std::size_t>& GumTrace::get_module_by_name(const std
 }
 
 void GumTrace::follow() {
+    LOGE("[gumtrace-debug] follow start: tid=%d mode=%llu",
+         trace_thread_id,
+         (unsigned long long) options.mode);
     trace_thread_id > 0
         ? gum_stalker_follow(_stalker, trace_thread_id, _transformer, nullptr)
         : gum_stalker_follow_me(_stalker, _transformer, nullptr);
 }
 
 void GumTrace::unfollow() {
+    LOGE("[gumtrace-debug] unfollow begin: total=%llu svc=%llu after_svc=%llu waiting_after_svc=%d last_pc=0x%llx last_svc_pc=0x%llx",
+         (unsigned long long) debug_callout_total,
+         (unsigned long long) debug_svc_count,
+         (unsigned long long) debug_callout_after_svc,
+         debug_waiting_after_svc ? 1 : 0,
+         (unsigned long long) debug_last_pc,
+         (unsigned long long) debug_last_svc_pc);
     // SVC/BL 的 FuncPrinter::after 在下一次 callout 开头执行；若 unfollow 过早，会丢掉尚未交付的 callout，
     // 不仅漏 syscall 的 after，也会漏 JNI_OnLoad 体内尚未打印的指令与末尾 ret（CPU 已执行完，但 Stalker 日志滞后）。
     // gum_stalker_flush 只刷 event sink，不能代替「再跑一条被跟踪指令」；勿在 native 伪造尾部，应由 Frida 推迟 unrun。
@@ -447,4 +489,9 @@ void GumTrace::unfollow() {
         trace_file.flush();
         trace_file.close();
     }
+    LOGE("[gumtrace-debug] unfollow done: total=%llu svc=%llu after_svc=%llu waiting_after_svc=%d",
+         (unsigned long long) debug_callout_total,
+         (unsigned long long) debug_svc_count,
+         (unsigned long long) debug_callout_after_svc,
+         debug_waiting_after_svc ? 1 : 0);
 }

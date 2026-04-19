@@ -83,6 +83,12 @@ public:
 
     std::unordered_map<size_t, std::string> svc_func_maps;
     std::unordered_map<size_t, std::string> func_fds;
+    uint64_t debug_callout_total = 0;
+    uint64_t debug_svc_count = 0;
+    uint64_t debug_callout_after_svc = 0;
+    uintptr_t debug_last_pc = 0;
+    uintptr_t debug_last_svc_pc = 0;
+    bool debug_waiting_after_svc = false;
 
     uintptr_t atomic_addr = 0;
     int atomic_width = 0;
