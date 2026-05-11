@@ -17,11 +17,21 @@ struct REG_LIST {
 typedef enum {
     GUM_OPTIONS_MODE_Stand = 0,
     GUM_OPTIONS_MODE_DEBUG,
-    GUM_OPTIONS_MODE_STABLE
+    GUM_OPTIONS_MODE_STABLE,
+    GUM_OPTIONS_MODE_CONTROL_FLOW
 } GUM_OPTIONS_MODE;
+
+constexpr uint64_t GUMTRACE_MAX_DETAILED_RANGES = 8;
+
+struct GUM_DETAILED_RANGE {
+    uint64_t start_rva;
+    uint64_t end_rva;
+};
 
 struct GUM_OPTIONS {
     uint64_t mode;
+    uint64_t detailed_range_count;
+    GUM_DETAILED_RANGE detailed_ranges[GUMTRACE_MAX_DETAILED_RANGES];
 };
 
 #define BUFFER_SIZE (1024 * 1024 * 50)
@@ -63,6 +73,7 @@ public:
     const std::string* in_range_module(size_t address);
     const RangeInfo* find_range_by_address(uintptr_t addr);
     const std::map<std::string, std::size_t>& get_module_by_name(const std::string &module_name);
+    bool is_in_detailed_rva_range(uintptr_t address, uintptr_t module_base) const;
     void follow();
     void unfollow();
 

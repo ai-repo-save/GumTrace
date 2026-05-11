@@ -387,6 +387,16 @@ void GumTrace::transform_callback(GumStalkerIterator *iterator, GumStalkerOutput
 
         if (Utils::is_lse(p_insn) == false) {
             const auto& module = self->get_module_by_name(*module_name_ptr);
+            const bool in_detailed_rva_range =
+                self->options.mode == GUM_OPTIONS_MODE_CONTROL_FLOW &&
+                self->is_in_detailed_rva_range(p_insn->address, module.at("base"));
+
+            if (self->options.mode == GUM_OPTIONS_MODE_CONTROL_FLOW &&
+                !in_detailed_rva_range &&
+                !Utils::is_control_flow_or_syscall(p_insn)) {
+                gum_stalker_iterator_keep(it);
+                continue;
+            }
 
             auto callback_ctx = self->callback_context_instance->pull(p_insn, gum_stalker_iterator_get_capstone(it),
                                                                       module_name_ptr->c_str(), module.at("base"));
@@ -396,6 +406,27 @@ void GumTrace::transform_callback(GumStalkerIterator *iterator, GumStalkerOutput
 
         gum_stalker_iterator_keep(it);
     }
+}
+
+bool GumTrace::is_in_detailed_rva_range(uintptr_t address, uintptr_t module_base) const {
+    if (options.detailed_range_count == 0 || address < module_base) {
+        return false;
+    }
+
+    const uint64_t rva = address - module_base;
+    const uint64_t count =
+        std::min<uint64_t>(options.detailed_range_count, GUMTRACE_MAX_DETAILED_RANGES);
+    for (uint64_t i = 0; i < count; i++) {
+        const auto &range = options.detailed_ranges[i];
+        if (range.end_rva <= range.start_rva) {
+            continue;
+        }
+        if (rva >= range.start_rva && rva < range.end_rva) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 const std::string *GumTrace::in_range_module(size_t address) {

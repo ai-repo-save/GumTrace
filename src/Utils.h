@@ -50,6 +50,7 @@ class Utils {
 public:
     static std::vector<std::string> str_split(const std::string& s, char symbol);
     static bool is_lse(cs_insn *insn);
+    static bool is_control_flow_or_syscall(cs_insn *insn);
     static bool is_exclusive_load(cs_insn *insn);
     static int get_data_width(cs_insn *insn, cs_arm64 *arm64);
     static bool get_register_value(arm64_reg reg, _GumArm64CpuContext *ctx, __uint128_t &value);

@@ -230,6 +230,30 @@ bool Utils::is_lse(cs_insn *insn) {
     }
 }
 
+bool Utils::is_control_flow_or_syscall(cs_insn *insn) {
+    if (insn == nullptr) return false;
+
+    if (insn->id == ARM64_INS_SVC) {
+        return true;
+    }
+
+    if (insn->detail == nullptr) {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < insn->detail->groups_count; i++) {
+        const uint8_t group = insn->detail->groups[i];
+        if (group == ARM64_GRP_JUMP ||
+            group == ARM64_GRP_CALL ||
+            group == ARM64_GRP_RET ||
+            group == ARM64_GRP_INT) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool Utils::is_exclusive_load(cs_insn *insn) {
     if (insn == nullptr) return false;
     
